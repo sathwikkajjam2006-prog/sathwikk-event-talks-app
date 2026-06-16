@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BigQuery Release Notes</title>
+  <meta name="description" content="Browse the latest Google BigQuery release notes and share updates on Twitter." />
+
+  <!-- Google Fonts — Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- ── Header ──────────────────────────────────────────── -->
+    <header class="header">
+      <div class="header__logo">
+        <div class="header__icon">⚡</div>
+        <h1 class="header__title">BigQuery Release Notes</h1>
+      </div>
+      <p class="header__subtitle">
+        Stay up to date with the latest BigQuery features, fixes, and announcements
+        — and share them on Twitter.
+      </p>
+    </header>
+
+    <!-- ── Toolbar ─────────────────────────────────────────── -->
+    <div class="toolbar">
+      <div class="toolbar__meta">
+        <span id="entry-count">–</span> entries &nbsp;·&nbsp;
+        last refreshed <span id="last-updated">–</span>
+      </div>
+      <button class="btn btn--primary" id="btn-refresh">
+        <span class="spinner" id="spinner"></span>
+        Refresh
+      </button>
+    </div>
+
+    <!-- ── Release cards container ─────────────────────────── -->
+    <main id="release-list" class="release-list" aria-label="Release notes">
+      <!-- Cards rendered by JS -->
+    </main>
+  </div>
+
+  <!-- ── Sticky tweet bar ────────────────────────────────── -->
+  <div class="tweet-bar" id="tweet-bar">
+    <span class="tweet-bar__label" id="tweet-label">Select a release to tweet</span>
+    <button class="btn btn--tweet" id="btn-tweet" disabled>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+      </svg>
+      Tweet
+    </button>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
