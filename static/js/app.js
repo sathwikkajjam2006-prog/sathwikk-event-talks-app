@@ -7,6 +7,18 @@
 (function () {
   "use strict";
 
+  /* ── Theme toggle ──────────────────────────────────────────── */
+  const themeSwitch = document.getElementById("theme-switch");
+  const savedTheme = localStorage.getItem("bq-theme") || "dark";
+  document.documentElement.setAttribute("data-theme", savedTheme);
+  themeSwitch.checked = savedTheme === "light";
+
+  themeSwitch.addEventListener("change", () => {
+    const theme = themeSwitch.checked ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("bq-theme", theme);
+  });
+
   /* ── DOM handles ──────────────────────────────────────────── */
   const releaseList = document.getElementById("release-list");
   const refreshBtn = document.getElementById("btn-refresh");

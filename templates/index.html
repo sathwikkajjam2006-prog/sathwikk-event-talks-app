@@ -20,9 +20,19 @@
   <div class="app-shell">
     <!-- ── Header ──────────────────────────────────────────── -->
     <header class="header">
-      <div class="header__logo">
-        <div class="header__icon">⚡</div>
-        <h1 class="header__title">BigQuery Release Notes</h1>
+      <div class="header__top-row">
+        <div class="header__logo">
+          <div class="header__icon">⚡</div>
+          <h1 class="header__title">BigQuery Release Notes</h1>
+        </div>
+        <label class="theme-toggle" title="Toggle light / dark mode">
+          <input type="checkbox" id="theme-switch" />
+          <span class="theme-toggle__track">
+            <span class="theme-toggle__icon theme-toggle__icon--sun">☀️</span>
+            <span class="theme-toggle__icon theme-toggle__icon--moon">🌙</span>
+            <span class="theme-toggle__thumb"></span>
+          </span>
+        </label>
       </div>
       <p class="header__subtitle">
         Stay up to date with the latest BigQuery features, fixes, and announcements
