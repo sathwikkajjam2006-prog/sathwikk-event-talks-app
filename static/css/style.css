@@ -141,6 +141,12 @@ body::before {
   font-weight: 600;
 }
 
+.toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 /* ── Buttons ───────────────────────────────────────────────── */
 .btn {
   display: inline-flex;
@@ -185,8 +191,21 @@ body::before {
   transform: translateY(-1px);
 }
 
+.btn--export {
+  background: rgba(52, 211, 153, 0.12);
+  color: var(--accent-green);
+  border: 1px solid rgba(52, 211, 153, 0.2);
+}
+
+.btn--export:hover:not(:disabled) {
+  background: rgba(52, 211, 153, 0.22);
+  border-color: rgba(52, 211, 153, 0.4);
+  transform: translateY(-1px);
+}
+
 .btn--tweet:disabled,
-.btn--primary:disabled {
+.btn--primary:disabled,
+.btn--export:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none !important;
@@ -455,6 +474,59 @@ body::before {
 
 .release-card__toggle:hover {
   color: var(--accent-cyan);
+}
+
+/* ── Copy button on card ───────────────────────────────────── */
+.release-card__copy {
+  position: absolute;
+  top: 16px;
+  right: 52px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  z-index: 2;
+}
+
+.release-card__copy:hover {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  background: rgba(79, 209, 197, 0.08);
+}
+
+.release-card__copy--copied {
+  color: var(--accent-green) !important;
+  border-color: var(--accent-green) !important;
+  background: rgba(52, 211, 153, 0.1) !important;
+}
+
+.copy-tooltip {
+  position: absolute;
+  top: 50px;
+  right: 48px;
+  background: var(--bg-card-hover);
+  color: var(--accent-green);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  z-index: 3;
+  animation: tooltipFade 1.5s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes tooltipFade {
+  0% { opacity: 0; transform: translateY(-4px); }
+  15% { opacity: 1; transform: translateY(0); }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 /* ── Tweet Bar (sticky bottom) ─────────────────────────────── */
