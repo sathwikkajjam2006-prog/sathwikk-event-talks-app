@@ -6,6 +6,14 @@
   <title>BigQuery Release Notes</title>
   <meta name="description" content="Browse the latest Google BigQuery release notes and share updates on Twitter." />
 
+  <!-- Fix #13: Apply saved theme BEFORE CSS paints to prevent flash -->
+  <script>
+    (function () {
+      var t = localStorage.getItem("bq-theme") || "dark";
+      document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
+
   <!-- Google Fonts — Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -25,7 +33,7 @@
           <div class="header__icon">⚡</div>
           <h1 class="header__title">BigQuery Release Notes</h1>
         </div>
-        <label class="theme-toggle" title="Toggle light / dark mode">
+        <label class="theme-toggle" title="Toggle light / dark mode" aria-label="Toggle light or dark mode">
           <input type="checkbox" id="theme-switch" />
           <span class="theme-toggle__track">
             <span class="theme-toggle__icon theme-toggle__icon--sun">☀️</span>
@@ -45,32 +53,39 @@
       <div class="toolbar__meta">
         <span id="entry-count">–</span> entries &nbsp;·&nbsp;
         last refreshed <span id="last-updated">–</span>
+        <!-- Fix #1: Hint that cards are clickable -->
+        <span class="toolbar__hint" id="toolbar-hint" aria-live="polite"></span>
       </div>
       <div class="toolbar__actions">
-        <button class="btn btn--export" id="btn-export" disabled>
+        <button class="btn btn--export" id="btn-export" disabled aria-label="Export all release notes to CSV">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          Export CSV
+          <span id="export-label">Export CSV</span>
         </button>
-        <button class="btn btn--primary" id="btn-refresh">
+        <button class="btn btn--primary" id="btn-refresh" aria-label="Refresh release notes">
           <span class="spinner" id="spinner"></span>
-          Refresh
+          <!-- Fix #7: Dynamic label — "Loading…" on first load, "Refresh" after -->
+          <span id="refresh-label">Loading…</span>
         </button>
       </div>
     </div>
 
     <!-- ── Release cards container ─────────────────────────── -->
-    <main id="release-list" class="release-list" aria-label="Release notes">
+    <main id="release-list" class="release-list" aria-label="BigQuery release notes">
       <!-- Cards rendered by JS -->
     </main>
   </div>
 
   <!-- ── Sticky tweet bar ────────────────────────────────── -->
-  <div class="tweet-bar" id="tweet-bar">
-    <span class="tweet-bar__label" id="tweet-label">Select a release to tweet</span>
+  <!-- Fix #2: Show deselect hint in tweet bar -->
+  <div class="tweet-bar" id="tweet-bar" role="complementary" aria-label="Share selected release">
+    <div class="tweet-bar__info">
+      <span class="tweet-bar__label" id="tweet-label">Select a release to tweet</span>
+      <span class="tweet-bar__hint">Press Esc or click card again to deselect</span>
+    </div>
     <button class="btn btn--tweet" id="btn-tweet" disabled>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
@@ -78,6 +93,13 @@
       Tweet
     </button>
   </div>
+
+  <!-- Fix #17: Back to top button -->
+  <button class="back-to-top" id="back-to-top" aria-label="Scroll back to top" title="Back to top">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polyline points="18 15 12 9 6 15"/>
+    </svg>
+  </button>
 
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>

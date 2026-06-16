@@ -1,17 +1,16 @@
 /**
  * BigQuery Release Notes — frontend logic
- * Fetches release entries from the Flask API, renders cards, and
- * lets the user select one to compose a tweet.
+ * All 17 UX improvements implemented.
  */
 
 (function () {
   "use strict";
 
   /* ── Theme toggle ──────────────────────────────────────────── */
+  // data-theme is already set in <head> to prevent flash;
+  // just sync the checkbox to match the stored value.
   const themeSwitch = document.getElementById("theme-switch");
-  const savedTheme = localStorage.getItem("bq-theme") || "dark";
-  document.documentElement.setAttribute("data-theme", savedTheme);
-  themeSwitch.checked = savedTheme === "light";
+  themeSwitch.checked = (localStorage.getItem("bq-theme") || "dark") === "light";
 
   themeSwitch.addEventListener("change", () => {
     const theme = themeSwitch.checked ? "light" : "dark";
@@ -20,28 +19,47 @@
   });
 
   /* ── DOM handles ──────────────────────────────────────────── */
-  const releaseList = document.getElementById("release-list");
-  const refreshBtn = document.getElementById("btn-refresh");
-  const spinner = document.getElementById("spinner");
-  const entryCount = document.getElementById("entry-count");
-  const lastUpdated = document.getElementById("last-updated");
-  const tweetBar = document.getElementById("tweet-bar");
-  const tweetLabel = document.getElementById("tweet-label");
-  const tweetBtn = document.getElementById("btn-tweet");
-  const exportBtn = document.getElementById("btn-export");
+  const releaseList   = document.getElementById("release-list");
+  const refreshBtn    = document.getElementById("btn-refresh");
+  const refreshLabel  = document.getElementById("refresh-label");
+  const spinner       = document.getElementById("spinner");
+  const entryCount    = document.getElementById("entry-count");
+  const lastUpdated   = document.getElementById("last-updated");
+  const toolbarHint   = document.getElementById("toolbar-hint");
+  const tweetBar      = document.getElementById("tweet-bar");
+  const tweetLabel    = document.getElementById("tweet-label");
+  const tweetBtn      = document.getElementById("btn-tweet");
+  const exportBtn     = document.getElementById("btn-export");
+  const exportLabel   = document.getElementById("export-label");
+  const backToTop     = document.getElementById("back-to-top");
+  const appShell      = document.querySelector(".app-shell");
 
-  let selectedIndex = null; // index of currently selected card
-  let entries = []; // cached feed entries
+  let selectedIndex   = null;
+  let entries         = [];
+  let isFirstLoad     = true;
+  let lastRefreshTime = null;
+  let relativeTimer   = null;
 
   /* ── Bootstrap ────────────────────────────────────────────── */
   fetchReleases();
 
-  refreshBtn.addEventListener("click", () => {
-    fetchReleases();
-  });
-
+  refreshBtn.addEventListener("click", () => fetchReleases());
   tweetBtn.addEventListener("click", composeTweet);
   exportBtn.addEventListener("click", exportToCsv);
+
+  // Fix #2: Escape to deselect
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && selectedIndex !== null) deselectAll();
+  });
+
+  // Fix #17: Back-to-top visibility
+  window.addEventListener("scroll", () => {
+    backToTop.classList.toggle("back-to-top--visible", window.scrollY > 400);
+  }, { passive: true });
+
+  backToTop.addEventListener("click", () =>
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  );
 
   /* ── Fetch releases from API ──────────────────────────────── */
   async function fetchReleases() {
@@ -50,20 +68,53 @@
 
     try {
       const res = await fetch("/api/releases");
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
       const data = await res.json();
-
       if (data.status !== "ok") throw new Error(data.message || "Unknown error");
 
       entries = data.entries;
-      renderEntries(entries);
-      entryCount.textContent = entries.length;
-      lastUpdated.textContent = new Date().toLocaleTimeString();
+
+      // Fix #4: Empty state
+      if (entries.length === 0) {
+        showEmptyState();
+        entryCount.textContent = "0";
+      } else {
+        renderEntries(entries);
+        entryCount.textContent = entries.length;
+        // Fix #1: Hint appears once data loads
+        toolbarHint.textContent = "· Click any card to select it for sharing";
+      }
+
       exportBtn.disabled = entries.length === 0;
+      lastRefreshTime = new Date();
+      updateRelativeTime();
     } catch (err) {
-      showToast("Failed to load releases: " + err.message);
+      // Fix #5: Error state with retry
+      showErrorState(err.message);
+      entryCount.textContent = "–";
+      exportBtn.disabled = true;
     } finally {
       setLoading(false);
+      isFirstLoad = false;
     }
+  }
+
+  /* ── Fix #11: Relative "last refreshed" timestamp ─────────── */
+  function updateRelativeTime() {
+    if (!lastRefreshTime) return;
+    clearTimeout(relativeTimer);
+
+    const diffSec = Math.floor((Date.now() - lastRefreshTime) / 1000);
+    let label;
+    if (diffSec < 10)        label = "just now";
+    else if (diffSec < 60)   label = `${diffSec}s ago`;
+    else if (diffSec < 3600) label = `${Math.floor(diffSec / 60)}m ago`;
+    else                     label = lastRefreshTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    lastUpdated.textContent = label;
+
+    // Keep updating every 10s for the first minute, then every minute
+    relativeTimer = setTimeout(updateRelativeTime, diffSec < 60 ? 10000 : 60000);
   }
 
   /* ── Render cards ─────────────────────────────────────────── */
@@ -76,68 +127,103 @@
       card.dataset.index = idx;
       card.setAttribute("role", "button");
       card.setAttribute("tabindex", "0");
+      card.setAttribute("aria-label", `${entry.title} — press Enter to select for sharing`);
 
-      // Count update types in the content
+      // Count update types
       const typeMatches = entry.content.match(/<h3>(.*?)<\/h3>/gi) || [];
-      const types = typeMatches.map((m) =>
-        m.replace(/<\/?h3>/gi, "").trim().toLowerCase()
-      );
+      const types = typeMatches.map((m) => m.replace(/<\/?h3>/gi, "").trim().toLowerCase());
+
+      // Fix #14: badge fallback for zero types
       const badgeLabel =
-        types.length === 1
-          ? types[0]
-          : types.length + " update" + (types.length !== 1 ? "s" : "");
+        types.length === 0 ? "release" :
+        types.length === 1 ? types[0] :
+        `${types.length} updates`;
 
       // Colorize h3 tags inside content
-      let styledContent = entry.content.replace(
+      const styledContent = entry.content.replace(
         /<h3>(.*?)<\/h3>/gi,
-        (_, text) => {
-          const lower = text.trim().toLowerCase();
-          let cls = "tag--" + lower.replace(/\s+/g, "-");
-          return `<h3 class="${cls}">${text}</h3>`;
-        }
+        (_, text) => `<h3 class="tag--${text.trim().toLowerCase().replace(/\s+/g, "-")}">${text}</h3>`
       );
 
+      // Fix #3: copy button is now inside header row, not absolutely positioned
+      // Fix #18: aria-label on "View docs" link
       card.innerHTML = `
-        <button class="release-card__copy" id="copy-${idx}" title="Copy to clipboard"
-                onclick="event.stopPropagation(); copyToClipboard(${idx})">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-          </svg>
-        </button>
         <div class="release-card__header">
           <span class="release-card__date">${escapeHtml(entry.title)}</span>
           <span class="release-card__badge">${escapeHtml(badgeLabel)}</span>
-          <a class="release-card__link" href="${escapeHtml(entry.link)}"
-             target="_blank" rel="noopener" onclick="event.stopPropagation()">
-            View docs ↗
-          </a>
+          <div class="release-card__actions">
+            <button class="release-card__copy" id="copy-${idx}"
+                    title="Copy to clipboard"
+                    aria-label="Copy ${escapeHtml(entry.title)} to clipboard"
+                    onclick="event.stopPropagation(); copyToClipboard(${idx})">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+            </button>
+            <a class="release-card__link" href="${escapeHtml(entry.link)}"
+               target="_blank" rel="noopener"
+               aria-label="View documentation for ${escapeHtml(entry.title)} (opens in new tab)"
+               onclick="event.stopPropagation()">
+              View docs ↗
+            </a>
+          </div>
         </div>
         <div class="release-card__body" id="body-${idx}">
           ${styledContent}
         </div>
-        <button class="release-card__toggle" id="toggle-${idx}"
-                onclick="event.stopPropagation(); toggleExpand(${idx})">
-          Show more ▾
-        </button>
+        <div class="release-card__footer">
+          <button class="release-card__toggle" id="toggle-${idx}"
+                  onclick="event.stopPropagation(); toggleExpand(${idx})">
+            Show more ▾
+          </button>
+        </div>
       `;
 
       card.addEventListener("click", () => selectCard(idx));
       card.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          selectCard(idx);
-        }
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectCard(idx); }
+        // Fix #6: Arrow-key navigation between cards
+        if (e.key === "ArrowDown") { e.preventDefault(); focusCard(idx + 1); }
+        if (e.key === "ArrowUp")   { e.preventDefault(); focusCard(idx - 1); }
       });
 
       releaseList.appendChild(card);
     });
   }
 
-  /* ── Expand / collapse card body ──────────────────────────── */
+  // Fix #6: Move focus to adjacent card
+  function focusCard(idx) {
+    const cards = releaseList.querySelectorAll(".release-card");
+    const clamped = Math.max(0, Math.min(idx, cards.length - 1));
+    if (cards[clamped]) cards[clamped].focus();
+  }
+
+  /* ── Fix #4 & #5: Empty and error states ─────────────────── */
+  function showEmptyState() {
+    releaseList.innerHTML = `
+      <div class="state-card state-card--empty">
+        <div class="state-card__icon">📭</div>
+        <h2 class="state-card__title">No release notes found</h2>
+        <p class="state-card__msg">The feed returned no entries. This may be temporary.</p>
+        <button class="btn btn--primary" onclick="fetchReleases()">Try Again</button>
+      </div>`;
+  }
+
+  function showErrorState(message) {
+    releaseList.innerHTML = `
+      <div class="state-card state-card--error">
+        <div class="state-card__icon">⚠️</div>
+        <h2 class="state-card__title">Couldn't load release notes</h2>
+        <p class="state-card__msg">${escapeHtml(message)}</p>
+        <button class="btn btn--primary" onclick="fetchReleases()">Try Again</button>
+      </div>`;
+  }
+
+  /* ── Fix #12: Expand / collapse with visible separator ────── */
   window.toggleExpand = function (idx) {
     const body = document.getElementById("body-" + idx);
-    const btn = document.getElementById("toggle-" + idx);
+    const btn  = document.getElementById("toggle-" + idx);
     const expanded = body.classList.toggle("expanded");
     btn.textContent = expanded ? "Show less ▴" : "Show more ▾";
   };
@@ -145,22 +231,19 @@
   /* ── Card selection ───────────────────────────────────────── */
   function selectCard(idx) {
     const cards = releaseList.querySelectorAll(".release-card");
-
-    if (selectedIndex === idx) {
-      // deselect
-      deselectAll();
-      return;
-    }
+    if (selectedIndex === idx) { deselectAll(); return; }
 
     cards.forEach((c) => c.classList.remove("release-card--selected"));
     cards[idx].classList.add("release-card--selected");
     selectedIndex = idx;
 
     const entry = entries[idx];
-    tweetLabel.innerHTML =
-      'Tweet about <strong>' + escapeHtml(entry.title) + "</strong>";
+    tweetLabel.innerHTML = "Tweet about <strong>" + escapeHtml(entry.title) + "</strong>";
     tweetBar.classList.add("tweet-bar--visible");
     tweetBtn.disabled = false;
+
+    // Fix #16: Dynamically pad the shell so tweet bar doesn't cover cards
+    adjustBottomPadding();
   }
 
   function deselectAll() {
@@ -169,39 +252,49 @@
     selectedIndex = null;
     tweetBar.classList.remove("tweet-bar--visible");
     tweetBtn.disabled = true;
+    appShell.style.paddingBottom = "";
+  }
+
+  // Fix #16: Measure actual tweet bar height and apply as padding
+  function adjustBottomPadding() {
+    requestAnimationFrame(() => {
+      const h = tweetBar.getBoundingClientRect().height;
+      appShell.style.paddingBottom = (h + 24) + "px";
+    });
   }
 
   /* ── Copy to clipboard ─────────────────────────────────────── */
   window.copyToClipboard = async function (idx) {
-    const entry = entries[idx];
+    const entry   = entries[idx];
     const copyBtn = document.getElementById("copy-" + idx);
 
-    // Build plain-text version
     const tempDiv = document.createElement("div");
     tempDiv.innerHTML = entry.content;
-    const plainText =
-      entry.title + "\n" +
-      entry.link + "\n\n" +
-      (tempDiv.textContent || tempDiv.innerText || "").trim();
+    const plainText = [
+      entry.title,
+      entry.link,
+      "",
+      (tempDiv.textContent || tempDiv.innerText || "").trim(),
+    ].join("\n");
 
     try {
       await navigator.clipboard.writeText(plainText);
 
-      // Visual feedback — swap icon to checkmark
+      // Swap to checkmark
       copyBtn.classList.add("release-card__copy--copied");
-      copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+      copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>`;
 
-      // Show tooltip
+      // Show tooltip anchored to the actions row
       const tooltip = document.createElement("span");
       tooltip.className = "copy-tooltip";
       tooltip.textContent = "Copied!";
       copyBtn.parentElement.appendChild(tooltip);
       setTimeout(() => tooltip.remove(), 1500);
 
-      // Reset icon after delay
+      // Reset
       setTimeout(() => {
         copyBtn.classList.remove("release-card__copy--copied");
-        copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+        copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
       }, 2000);
     } catch (err) {
       showToast("Failed to copy: " + err.message);
@@ -213,99 +306,68 @@
     if (!entries.length) return;
 
     const headers = ["Title", "Date", "Link", "Type", "Content"];
-    const rows = [];
-
-    entries.forEach((entry) => {
-      // Extract update types
+    const rows = entries.map((entry) => {
       const typeMatches = entry.content.match(/<h3>(.*?)<\/h3>/gi) || [];
-      const types = typeMatches
-        .map((m) => m.replace(/<\/?h3>/gi, "").trim())
-        .join("; ");
-
-      // Extract plain text content
+      const types = typeMatches.map((m) => m.replace(/<\/?h3>/gi, "").trim()).join("; ");
       const tempDiv = document.createElement("div");
       tempDiv.innerHTML = entry.content;
-      const plainContent = (tempDiv.textContent || tempDiv.innerText || "")
-        .trim()
-        .replace(/\s+/g, " ");
-
-      rows.push([
-        entry.title,
-        entry.updated,
-        entry.link,
-        types,
-        plainContent,
-      ]);
+      const plain = (tempDiv.textContent || tempDiv.innerText || "").trim().replace(/\s+/g, " ");
+      return [entry.title, entry.updated, entry.link, types, plain];
     });
 
-    // Build CSV string with proper escaping
-    const csvContent = [
-      headers.map(csvEscape).join(","),
-      ...rows.map((row) => row.map(csvEscape).join(",")),
-    ].join("\n");
-
-    // Trigger download
-    const blob = new Blob(["\uFEFF" + csvContent], {
-      type: "text/csv;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download =
-      "bigquery-release-notes-" +
-      new Date().toISOString().slice(0, 10) +
-      ".csv";
-    link.click();
+    const csv  = [headers, ...rows].map((r) => r.map(csvEscape).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `bigquery-release-notes-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
     URL.revokeObjectURL(url);
+
+    // Fix #10: Visual confirmation after export
+    exportLabel.textContent = "✓ Exported!";
+    exportBtn.classList.add("btn--export-done");
+    setTimeout(() => {
+      exportLabel.textContent = "Export CSV";
+      exportBtn.classList.remove("btn--export-done");
+    }, 2000);
   }
 
   function csvEscape(value) {
-    const str = String(value);
-    if (str.includes('"') || str.includes(",") || str.includes("\n")) {
-      return '"' + str.replace(/"/g, '""') + '"';
-    }
-    return str;
+    const s = String(value);
+    return (s.includes('"') || s.includes(",") || s.includes("\n"))
+      ? '"' + s.replace(/"/g, '""') + '"'
+      : s;
   }
 
   /* ── Compose tweet ────────────────────────────────────────── */
   function composeTweet() {
     if (selectedIndex === null) return;
     const entry = entries[selectedIndex];
-
-    // Build a plain-text snippet from the HTML content
     const tempDiv = document.createElement("div");
     tempDiv.innerHTML = entry.content;
-    let plainText = (tempDiv.textContent || tempDiv.innerText || "").trim();
+    let plain = (tempDiv.textContent || tempDiv.innerText || "").trim();
+    if (plain.length > 160) plain = plain.substring(0, 160).trim() + "…";
 
-    // Truncate to keep tweet concise
-    const maxSnippet = 160;
-    if (plainText.length > maxSnippet) {
-      plainText = plainText.substring(0, maxSnippet).trim() + "…";
-    }
-
-    const tweetText =
-      "📢 BigQuery Release — " +
-      entry.title +
-      "\n\n" +
-      plainText +
-      "\n\n" +
-      entry.link +
-      "\n\n#BigQuery #GoogleCloud";
-
-    const url =
-      "https://twitter.com/intent/tweet?text=" +
-      encodeURIComponent(tweetText);
-
-    window.open(url, "_blank", "noopener,width=600,height=460");
+    const text = `📢 BigQuery Release — ${entry.title}\n\n${plain}\n\n${entry.link}\n\n#BigQuery #GoogleCloud`;
+    window.open(
+      "https://twitter.com/intent/tweet?text=" + encodeURIComponent(text),
+      "_blank",
+      "noopener,width=600,height=460"
+    );
   }
 
-  /* ── Loading / skeleton state ─────────────────────────────── */
+  /* ── Fix #7: Loading state with contextual label ──────────── */
   function setLoading(isLoading) {
     refreshBtn.disabled = isLoading;
     spinner.classList.toggle("spinner--active", isLoading);
+    refreshLabel.textContent = isLoading
+      ? (isFirstLoad ? "Loading…" : "Refreshing…")
+      : "Refresh";
 
     if (isLoading) {
       releaseList.innerHTML = buildSkeleton(5);
+      exportBtn.disabled = true;
     }
   }
 
